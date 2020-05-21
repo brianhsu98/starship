@@ -4,15 +4,17 @@ use super::{Context, Module, RootModuleConfig};
 
 use crate::configs::hg_branch::HgBranchConfig;
 
+use std::path::PathBuf;
+
 /// Creates a module with the Hg bookmark or branch in the current directory
 ///
 /// Will display the bookmark or branch name if the current directory is an hg repo
 pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
-    let is_hg_repo = context.try_begin_scan()?.set_folders(&[".hg"]).is_match();
-
-    if !is_hg_repo {
-        return None;
-    }
+    // My own hack stacked on top to find the hg directory recursively.
+    let hg_path = match find_hg_directory(context.current_dir.clone()) {
+        Some(hg_path) => hg_path,
+        None => return None
+    };
 
     let mut module = context.new_module("hg_branch");
     let config = HgBranchConfig::try_load(module.config);
@@ -35,7 +37,7 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
     };
 
     let branch_name =
-        get_hg_current_bookmark(context).unwrap_or_else(|| get_hg_branch_name(context));
+        get_hg_current_bookmark(hg_path.clone()).unwrap_or_else(|| get_hg_commit_name(hg_path));
 
     let truncated_graphemes = get_graphemes(&branch_name, len);
     // The truncation symbol should only be added if we truncated
@@ -54,14 +56,49 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
     Some(module)
 }
 
-fn get_hg_branch_name(ctx: &Context) -> String {
-    std::fs::read_to_string(ctx.current_dir.join(".hg").join("branch"))
-        .map(|s| s.trim().into())
-        .unwrap_or_else(|_| "default".to_string())
+/// Recursively ascends through the current path until either the root is reached or
+/// a .hg directory is found.
+fn find_hg_directory(mut current_path: PathBuf) -> Option<PathBuf> {
+    while current_path.pop() {
+        let read_dir = match current_path.read_dir() {
+            Ok(read_dir) => read_dir,
+            Err(_e) => return None
+        };
+
+        for direntry in read_dir {
+            let entry = match direntry {
+                Ok(entry) => entry,
+                Err(_e) => return None,
+            };
+
+            let file_type = match entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(_e) => return None,
+            };
+
+            if file_type.is_dir() && entry.file_name() == ".hg" {
+                return Some(entry.path());
+            }
+        }
+    }
+    None
 }
 
-fn get_hg_current_bookmark(ctx: &Context) -> Option<String> {
-    std::fs::read_to_string(ctx.current_dir.join(".hg").join("bookmarks.current"))
+fn get_hg_commit_name(hg_path: PathBuf) -> String {
+    // This is reading the entire namejournal file, which is somewhat large. Faster than running hg id, though.
+    let namejournal = std::fs::read_to_string(hg_path.join("namejournal"))
+        .map(|s| s.trim().into())
+        .unwrap_or_else(|_| "".to_string());
+    let lines: Vec<&str> = namejournal.split("\n").collect();
+
+    match lines.last() {
+        Some(line) => line.to_owned().to_string(),
+        None => "".to_string()
+    }
+}
+
+fn get_hg_current_bookmark(hg_path: PathBuf) -> Option<String> {
+    std::fs::read_to_string(hg_path.join("bookmarks.current"))
         .map(|s| s.trim().into())
         .ok()
 }
