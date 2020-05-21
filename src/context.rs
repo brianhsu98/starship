@@ -191,7 +191,7 @@ impl DirContents {
         Self::from_path_with_timeout(base, Duration::from_secs(30))
     }
 
-    fn from_path_with_timeout(base: &PathBuf, timeout: Duration) -> Result<Self, std::io::Error> {
+    pub fn from_path_with_timeout(base: &PathBuf, timeout: Duration) -> Result<Self, std::io::Error> {
         let start = SystemTime::now();
 
         let mut folders: HashSet<PathBuf> = HashSet::new();
