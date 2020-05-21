@@ -60,6 +60,7 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
 /// a .hg directory is found.
 fn find_hg_directory(mut current_path: PathBuf) -> Option<PathBuf> {
     while current_path.pop() {
+        println!("debug: bribri {:?}", current_path);
         let read_dir = match current_path.read_dir() {
             Ok(read_dir) => read_dir,
             Err(_e) => return None
