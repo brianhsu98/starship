@@ -59,8 +59,7 @@ pub fn module<'a>(context: &'a Context) -> Option<Module<'a>> {
 /// Recursively ascends through the current path until either the root is reached or
 /// a .hg directory is found.
 fn find_hg_directory(mut current_path: PathBuf) -> Option<PathBuf> {
-    while current_path.pop() {
-        println!("debug: bribri {:?}", current_path);
+    loop {
         let read_dir = match current_path.read_dir() {
             Ok(read_dir) => read_dir,
             Err(_e) => return None
@@ -80,6 +79,10 @@ fn find_hg_directory(mut current_path: PathBuf) -> Option<PathBuf> {
             if file_type.is_dir() && entry.file_name() == ".hg" {
                 return Some(entry.path());
             }
+        }
+
+        if !current_path.pop() {
+            break;
         }
     }
     None
